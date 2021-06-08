@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 
 transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
 
+
 def generate_mnist_data_set():
     train_set = torchvision.datasets.MNIST(root='./data', train=True, download=True, transform=transform)
     return torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=2)
@@ -26,7 +27,7 @@ num_channels = 16
 # number of input channels
 input_channels = 1
 # Number of training epochs
-num_epochs = 30
+num_epochs = 10
 # Learning rate for optimizers
 lr = 0.0002
 # Beta1 hyper-param for Adam optimizers
@@ -77,8 +78,10 @@ class AutoEncoderMNIST(nn.Module):
             nn.Flatten(),
             # size (396,)
             nn.Linear(num_channels * 4 * 7 * 7, 396),
+            nn.BatchNorm1d(396),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(396, latent_vec_size),  # output size (latent_vec_size,)
+            nn.Sigmoid
         )
         self.decoder = nn.Sequential(
             # size (latent_vec_size,)
@@ -176,7 +179,7 @@ def test_AE_novel_samples(path, num_tests):
 
 
 if __name__ == '__main__':
-    test_AE_novel_samples('./auto_encoder_mnist', 10)
+    # test_AE_novel_samples('./auto_encoder_mnist', 10)
     AE = AutoEncoderMNIST().to(device)
     dl = generate_mnist_data_set()
     AE.apply(weights_init)
