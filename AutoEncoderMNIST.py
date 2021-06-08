@@ -21,13 +21,13 @@ device = torch.device("cuda" if (torch.cuda.is_available()) else "cpu")
 # Batch size during training
 batch_size = 128
 # Size of z latent vector (i.e. size of generator input)
-latent_vec_size = 30  # TODO
+latent_vec_size = 12  # TODO
 # Size of feature maps in generator and discriminator
-num_channels = 16
+num_channels = 24
 # number of input channels
 input_channels = 1
 # Number of training epochs
-num_epochs = 10
+num_epochs = 20
 # Learning rate for optimizers
 lr = 0.0002
 # Beta1 hyper-param for Adam optimizers
@@ -44,25 +44,25 @@ def tensor_to_plt_im(im: torch.Tensor):
 
 class AutoEncoderMNIST(nn.Module):
     # def __init__(self):
-        # super(AutoEncoderMNIST, self).__init__()
-        # self.encoder = nn.Sequential(
-        #     nn.Flatten(),
-        #     nn.Linear(input_channels * image_size * image_size, 128),
-        #     nn.ReLU(True),
-        #     nn.Linear(128, 64),
-        #     nn.ReLU(True),
-        #     nn.Linear(64, 12),
-        #     nn.ReLU(True),
-        #     nn.Linear(12, latent_vec_size))
-        # self.decoder = nn.Sequential(
-        #     nn.Linear(latent_vec_size, 12),
-        #     nn.ReLU(True),
-        #     nn.Linear(12, 64),
-        #     nn.ReLU(True),
-        #     nn.Linear(64, 128),
-        #     nn.ReLU(True), nn.Linear(128, input_channels * image_size * image_size),
-        #     nn.Unflatten(1, (input_channels, image_size, image_size)),
-        #     nn.Tanh())
+    # super(AutoEncoderMNIST, self).__init__()
+    # self.encoder = nn.Sequential(
+    #     nn.Flatten(),
+    #     nn.Linear(input_channels * image_size * image_size, 128),
+    #     nn.ReLU(True),
+    #     nn.Linear(128, 64),
+    #     nn.ReLU(True),
+    #     nn.Linear(64, 12),
+    #     nn.ReLU(True),
+    #     nn.Linear(12, latent_vec_size))
+    # self.decoder = nn.Sequential(
+    #     nn.Linear(latent_vec_size, 12),
+    #     nn.ReLU(True),
+    #     nn.Linear(12, 64),
+    #     nn.ReLU(True),
+    #     nn.Linear(64, 128),
+    #     nn.ReLU(True), nn.Linear(128, input_channels * image_size * image_size),
+    #     nn.Unflatten(1, (input_channels, image_size, image_size)),
+    #     nn.Tanh())
     def __init__(self):
         super(AutoEncoderMNIST, self).__init__()
         self.encoder = nn.Sequential(
@@ -76,8 +76,8 @@ class AutoEncoderMNIST(nn.Module):
             nn.LeakyReLU(0.2, inplace=True),
             # size (num_channels*4) x 7 x 7
             nn.Flatten(),
-            # size (396,)
             nn.Linear(num_channels * 4 * 7 * 7, 396),
+            # size (396,)
             nn.BatchNorm1d(396),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(396, latent_vec_size),  # output size (latent_vec_size,)
@@ -89,6 +89,7 @@ class AutoEncoderMNIST(nn.Module):
             nn.ReLU(True),
             # size (396,)
             nn.Linear(396, num_channels * 4 * 7 * 7),
+            nn.BatchNorm1d(num_channels * 4 * 7 * 7),
             nn.ReLU(True),
             nn.Unflatten(1, (num_channels*4, 7, 7)),
             # size (num_channels*4) x 7 x 7
@@ -138,9 +139,9 @@ def train(net: AutoEncoderMNIST, dataloader, criterion=nn.MSELoss()):
             err = criterion(image_AE_output, batch)
 
             # loss function in order to force latent space into normal standard distribution
-            mean, var = torch.mean(enc_output), torch.var(enc_output)
-            kurtosis = calc_kurtosis(enc_output, mean, var)
-            err += (mean ** 2 + (var - 1) ** 2 + (kurtosis - 3) ** 2)
+            # mean, var = torch.mean(enc_output), torch.var(enc_output)
+            # kurtosis = calc_kurtosis(enc_output, mean, var)
+            # err += (mean ** 2 + (var - 1) ** 2 + (kurtosis - 3) ** 2)
 
             err.backward()  # perform back-propagation
             optimizer.step()
@@ -152,7 +153,7 @@ def train(net: AutoEncoderMNIST, dataloader, criterion=nn.MSELoss()):
             # Check how the generator portion of the auto-encoder is doing by saving it's output on fixed_noise
             if i % 500 == 0:
                 with torch.no_grad():
-                    fixed_noise = torch.randn(num_test_samples, latent_vec_size, device=device)
+                    fixed_noise = torch.sigmoid(torch.randn(num_test_samples, latent_vec_size, device=device))
                     fake = net.decoder(fixed_noise).detach().cpu()
                 plt.imshow(tensor_to_plt_im(vutils.make_grid(fake)))
                 plt.show()
