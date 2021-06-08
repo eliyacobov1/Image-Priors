@@ -170,7 +170,7 @@ def test_AE_novel_samples(path, num_tests):
     AE.eval()
     img_lst = []
     for i in range(num_tests):
-        noise = torch.randn(2 * batch_size, latent_vec_size, device=device)
+        noise = torch.sigmoid(torch.randn(2 * batch_size, latent_vec_size, device=device))
         with torch.no_grad():
             im = AE.decoder(noise).detach().cpu()
         img_lst.append(im)
@@ -180,10 +180,10 @@ def test_AE_novel_samples(path, num_tests):
 
 
 if __name__ == '__main__':
-    # test_AE_novel_samples('./auto_encoder_mnist', 10)
-    AE = AutoEncoderMNIST().to(device)
+    test_AE_novel_samples('./auto_encoder_mnist', 10)
+    # AE = AutoEncoderMNIST().to(device)
     dl = generate_mnist_data_set()
-    AE.apply(weights_init)
+    # AE.apply(weights_init)
 
     # Create a batch of latent vectors to check the generator's progress
-    train(AE, dataloader=dl)
+    # train(AE, dataloader=dl)
