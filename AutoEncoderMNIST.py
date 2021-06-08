@@ -81,7 +81,7 @@ class AutoEncoderMNIST(nn.Module):
             nn.BatchNorm1d(396),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(396, latent_vec_size),  # output size (latent_vec_size,)
-            nn.Sigmoid
+            nn.Sigmoid()
         )
         self.decoder = nn.Sequential(
             # size (latent_vec_size,)
