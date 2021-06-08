@@ -2,11 +2,13 @@ import time
 import torch
 import torch.nn as nn
 import torchvision
+import torchvision.transforms as transforms
 import torch.optim as optim
 import torchvision.utils as vutils
 import matplotlib.pyplot as plt
-from GAN import weights_init, transform
 
+
+transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
 
 def generate_mnist_data_set():
     train_set = torchvision.datasets.MNIST(root='./data', train=True, download=True, transform=transform)
