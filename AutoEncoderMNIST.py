@@ -6,7 +6,9 @@ import torchvision.transforms as transforms
 import torch.optim as optim
 import torchvision.utils as vutils
 import matplotlib.pyplot as plt
+import numpy as np
 
+path = './auto_encoder_mnist'
 
 transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
 
@@ -121,7 +123,7 @@ def weights_init(m):
         nn.init.constant_(m.bias.data, 0)
 
 
-def train(net: AutoEncoderMNIST, dataloader, criterion=nn.MSELoss()):
+def train(net: AutoEncoderMNIST, dataloader, criterion=nn.MSELoss(), modify_loss=False):
     optimizer = optim.Adam(net.parameters(), lr=lr, betas=(beta1, 0.999))
     print("Starting Training Loop...")
     # For each epoch
@@ -132,16 +134,17 @@ def train(net: AutoEncoderMNIST, dataloader, criterion=nn.MSELoss()):
             batch = data[0].to(device)  # Format batch
 
             # Forward pass batch through AutoEncoder
-            enc_output = net.encoder(batch)  # latent vector that is being outputted by the encoder
             image_AE_output = net(batch)  # image that is being outputted by the whole net
+            enc_output = net.encoder(batch)
 
             # Calculate the gradients for this batch, accumulated (summed) with previous gradients
             err = criterion(image_AE_output, batch)
 
-            # loss function in order to force latent space into normal standard distribution
-            # mean, var = torch.mean(enc_output), torch.var(enc_output)
-            # kurtosis = calc_kurtosis(enc_output, mean, var)
-            # err += (mean ** 2 + (var - 1) ** 2 + (kurtosis - 3) ** 2)
+            if modify_loss:
+                # loss function in order to force latent space into normal standard distribution
+                mean, var = torch.mean(enc_output), torch.var(enc_output)
+                kurtosis = calc_kurtosis(enc_output, mean, var)
+                err += (mean ** 2 + (var - 1) ** 2 + (kurtosis - 3) ** 2)
 
             err.backward()  # perform back-propagation
             optimizer.step()
@@ -157,7 +160,7 @@ def train(net: AutoEncoderMNIST, dataloader, criterion=nn.MSELoss()):
                     fake = net.decoder(fixed_noise).detach().cpu()
                 plt.imshow(tensor_to_plt_im(vutils.make_grid(fake)))
                 plt.show()
-    torch.save(net.state_dict(), './auto_encoder_mnist')
+    torch.save(net.state_dict(), f'./auto_encoder_mnist{"_loss_modified" if modify_loss else ""}')
 
 
 def test_AE_novel_samples(path, num_tests):
@@ -177,13 +180,63 @@ def test_AE_novel_samples(path, num_tests):
         plt.imshow(tensor_to_plt_im(img_lst[-1][-1]), cmap='gray')
         plt.show()
         time.sleep(2)
+    return img_lst
+
+
+def add_gaussian_noise(image, min_sigma=0, max_sigma=0.5):
+    """
+    Add random gaussian noise to an image
+    :param image: a grayscale image with values in the [0, 1] range of type float64.
+    :param min_sigma: a non-negative scalar value representing the minimal variance of the gaussian distribution.
+    :param max_sigma: a non-negative scalar value larger than or equal to min_sigma, representing the maximal variance of the gaussian distribution
+    :return: the corrupted image
+    """
+    sigma = np.random.uniform(low=min_sigma, high=max_sigma, size=1)[0]
+    noise = np.random.normal(loc=0, scale=sigma, size=image.shape)
+    corrupted = image + noise
+    # round image values to nearest fracture of form (i / 255)
+    corrupted = np.around(255*corrupted) / 255
+    return np.clip(corrupted, 0.0, 1.0)  # clip the image to the range of [0, 1]
+
+
+def scatter_2d_plane_form_latent_space(dataloader):
+    """
+    this function scatters the 2D plots of index-pairings of 384 encoded images
+    """
+    AE = AutoEncoderMNIST()
+    AE.load_state_dict(torch.load(path))
+    AE.eval()
+    latent_vec_list, i = [], 0
+
+    # ----------- concatenate the 3 first batches -----------
+    for data in dataloader:
+        batch = data[0].to(device)  # Format batch
+        latent_vec_list.append(AE.encoder(batch).detach())
+        i += 1
+        if i >= 3:  # 3 first batches consist of 384 image vectors
+            break
+
+    concat_latent_vectors = torch.cat((latent_vec_list[0], latent_vec_list[1], latent_vec_list[2]), 0)
+    index_pairs = [(1, 5), (2, 7), (3, 9), (4, 11), (0, 8)]
+
+    # ---------------------- plot the 2D scatter if each of the index pairings above ----------------------
+    for p in index_pairs:
+        plt.scatter(concat_latent_vectors[:, p[0]], concat_latent_vectors[:, p[1]],
+                    label=f"2D scatter of coordinates {p[0]} vs {p[1]}")
+        plt.legend()
+        plt.title(f"2D scatter of latent vectors for 300 images, coordinates {p[0]} vs {p[1]}")
+        plt.ylabel(f"coordinate {p[1]}")
+        plt.xlabel(f"coordinate {p[0]}")
+        plt.savefig(f'2d_scatter_{p[0]}_vs_{p[1]}.png')
+        plt.show()
 
 
 if __name__ == '__main__':
-    test_AE_novel_samples('./auto_encoder_mnist', 10)
-    # AE = AutoEncoderMNIST().to(device)
+    # test_AE_novel_samples(path, 10)
+    AE = AutoEncoderMNIST().to(device)
     dl = generate_mnist_data_set()
-    # AE.apply(weights_init)
+    scatter_2d_plane_form_latent_space(dl)
+    AE.apply(weights_init)
 
     # Create a batch of latent vectors to check the generator's progress
-    # train(AE, dataloader=dl)
+    train(AE, dataloader=dl, modify_loss=True)

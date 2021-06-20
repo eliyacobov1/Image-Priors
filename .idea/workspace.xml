@@ -56,7 +56,11 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1623144457910</updated>
-      <workItem from="1623144459293" duration="2433000" />
+      <workItem from="1623144459293" duration="3338000" />
+      <workItem from="1623682423276" duration="6236000" />
+      <workItem from="1623748987124" duration="4780000" />
+      <workItem from="1624088419843" duration="382000" />
+      <workItem from="1624223750185" duration="882000" />
     </task>
     <servers />
   </component>
@@ -64,6 +68,6 @@
     <option name="version" value="3" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/Image_Priors$AutoEncoderMNIST.coverage" NAME="AutoEncoderMNIST Coverage Results" MODIFIED="1623155270960" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/Image_Priors$AutoEncoderMNIST.coverage" NAME="AutoEncoderMNIST Coverage Results" MODIFIED="1623749496953" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>
