@@ -6,11 +6,36 @@ import torchvision.transforms as transforms
 import torch.optim as optim
 import torchvision.utils as vutils
 import matplotlib.pyplot as plt
-import numpy as np
 
-path = './auto_encoder_mnist'
+path = './auto_encoder_mnist with noise'
+
+
+class AddGaussianNoise(object):
+    """
+    this class is used in order to add gaussian noise to images
+    """
+    def __init__(self, mean=0., std=0.75):
+        self.std = std
+        self.mean = mean
+    
+    def __call__(self, tensor):
+        return tensor + torch.randn(tensor.size()) * self.std + self.mean
+
+
+class AddMaskPaintingNoise(object):
+    """
+    this class is used in order to add in-painting mask noise to images
+    """
+    def __call__(self, tensor):
+        mask = torch.ones(tensor.size())
+        mask[..., 15:] = 0
+        return tensor * mask
+
 
 transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
+
+noiser = AddGaussianNoise()
+in_painter = AddMaskPaintingNoise()
 
 
 def generate_mnist_data_set():
@@ -45,26 +70,6 @@ def tensor_to_plt_im(im: torch.Tensor):
 
 
 class AutoEncoderMNIST(nn.Module):
-    # def __init__(self):
-    # super(AutoEncoderMNIST, self).__init__()
-    # self.encoder = nn.Sequential(
-    #     nn.Flatten(),
-    #     nn.Linear(input_channels * image_size * image_size, 128),
-    #     nn.ReLU(True),
-    #     nn.Linear(128, 64),
-    #     nn.ReLU(True),
-    #     nn.Linear(64, 12),
-    #     nn.ReLU(True),
-    #     nn.Linear(12, latent_vec_size))
-    # self.decoder = nn.Sequential(
-    #     nn.Linear(latent_vec_size, 12),
-    #     nn.ReLU(True),
-    #     nn.Linear(12, 64),
-    #     nn.ReLU(True),
-    #     nn.Linear(64, 128),
-    #     nn.ReLU(True), nn.Linear(128, input_channels * image_size * image_size),
-    #     nn.Unflatten(1, (input_channels, image_size, image_size)),
-    #     nn.Tanh())
     def __init__(self):
         super(AutoEncoderMNIST, self).__init__()
         self.encoder = nn.Sequential(
@@ -102,7 +107,7 @@ class AutoEncoderMNIST(nn.Module):
             nn.ConvTranspose2d(num_channels * 2, input_channels, kernel_size=4, stride=2, padding=1, bias=False),
             nn.Tanh(),  # the final output image size. (num_input_channels) x 28 x 28
         )
-
+    
     def forward(self, x):
         return self.decoder(self.encoder(x))
 
@@ -123,7 +128,8 @@ def weights_init(m):
         nn.init.constant_(m.bias.data, 0)
 
 
-def train(net: AutoEncoderMNIST, dataloader, criterion=nn.MSELoss(), modify_loss=False):
+def train(net: AutoEncoderMNIST, dataloader, criterion=nn.MSELoss(), modify_loss=False,
+          add_noise=False, add_mask=False):
     optimizer = optim.Adam(net.parameters(), lr=lr, betas=(beta1, 0.999))
     print("Starting Training Loop...")
     # For each epoch
@@ -132,35 +138,37 @@ def train(net: AutoEncoderMNIST, dataloader, criterion=nn.MSELoss(), modify_loss
         for i, data in enumerate(dataloader, 0):
             optimizer.zero_grad()
             batch = data[0].to(device)  # Format batch
-
+            
             # Forward pass batch through AutoEncoder
-            image_AE_output = net(batch)  # image that is being outputted by the whole net
-            enc_output = net.encoder(batch)
-
+            input_batch = noiser(batch) if add_noise else(in_painter(batch) if add_mask else batch)
+            image_AE_output = net(input_batch)
+            enc_output = net.encoder(input_batch)
+            
             # Calculate the gradients for this batch, accumulated (summed) with previous gradients
             err = criterion(image_AE_output, batch)
-
+            
             if modify_loss:
                 # loss function in order to force latent space into normal standard distribution
                 mean, var = torch.mean(enc_output), torch.var(enc_output)
                 kurtosis = calc_kurtosis(enc_output, mean, var)
                 err += (mean ** 2 + (var - 1) ** 2 + (kurtosis - 3) ** 2)
-
+            
             err.backward()  # perform back-propagation
             optimizer.step()
-
+            
             # Output training stats
             if i % 50 == 0:
                 print('[%d/%d][%d/%d]\tLoss %.4f\t' % (epoch+1, num_epochs, i, len(dataloader), err.item()))
-
+            
             # Check how the generator portion of the auto-encoder is doing by saving it's output on fixed_noise
             if i % 500 == 0:
                 with torch.no_grad():
-                    fixed_noise = torch.sigmoid(torch.randn(num_test_samples, latent_vec_size, device=device))
-                    fake = net.decoder(fixed_noise).detach().cpu()
-                plt.imshow(tensor_to_plt_im(vutils.make_grid(fake)))
-                plt.show()
-    torch.save(net.state_dict(), f'./auto_encoder_mnist{"_loss_modified" if modify_loss else ""}')
+                    plt.imshow(tensor_to_plt_im(vutils.make_grid(input_batch[:24])), cmap='gray')
+                    plt.show()
+                    plt.imshow(tensor_to_plt_im(vutils.make_grid(image_AE_output[:24])), cmap='gray')
+                    plt.show()
+    torch.save(net.state_dict(), f'./auto_encoder_mnist{"_loss_modified" if modify_loss else ""}' +
+               f'{" with noise" if add_noise else("with masking" if add_mask else "")}')
 
 
 def test_AE_novel_samples(path, num_tests):
@@ -183,22 +191,52 @@ def test_AE_novel_samples(path, num_tests):
     return img_lst
 
 
-def add_gaussian_noise(image, min_sigma=0, max_sigma=0.5):
+def calc_posterior_distribution(I, Ic, AE, sigma=.75):
     """
-    Add random gaussian noise to an image
-    :param image: a grayscale image with values in the [0, 1] range of type float64.
-    :param min_sigma: a non-negative scalar value representing the minimal variance of the gaussian distribution.
-    :param max_sigma: a non-negative scalar value larger than or equal to min_sigma, representing the maximal variance of the gaussian distribution
-    :return: the corrupted image
+    calculate the posterior distribution of the form: -logP(Ic|I)-logP(I) = (Ic-I)^2/2*sigma^2 + ||AE(I)-I||
+    :param I: image from the original image distribution
+    :param Ic: corrupted image to be restored
+    :param AE: a pre-trained auto encoder
+    :param sigma:
     """
-    sigma = np.random.uniform(low=min_sigma, high=max_sigma, size=1)[0]
-    noise = np.random.normal(loc=0, scale=sigma, size=image.shape)
-    corrupted = image + noise
-    # round image values to nearest fracture of form (i / 255)
-    corrupted = np.around(255*corrupted) / 255
-    return np.clip(corrupted, 0.0, 1.0)  # clip the image to the range of [0, 1]
+    return torch.norm(Ic-I)/sigma**2 + torch.norm(AE(I) - I)
 
 
+def reconstruct_image(Ic, AE, dataloader):
+    """
+    this function returns the most suitable candidate form the given image distribution to be the reconstructed
+    image of the given image
+    """
+    posterior_distribution_minimizer = [float('inf'), None]
+    for data in dataloader:
+        batch = data[0].to(device)
+        for i in range(batch.shape[0]):
+            I = batch[i:i+1]
+            posterior_distribution = calc_posterior_distribution(I, Ic, AE)
+            if posterior_distribution < posterior_distribution_minimizer[0]:
+                posterior_distribution_minimizer[0] = posterior_distribution
+                posterior_distribution_minimizer[1] = I
+    return posterior_distribution_minimizer[1]
+
+
+def test_AE_reconstruction(path, num_tests, dataloader, corruption='noise'):
+    AE = AutoEncoderMNIST()
+    AE.load_state_dict(torch.load(path))
+    AE.eval()
+    
+    batch = next(iter(dataloader))[0].to(device)
+        
+    for i in range(num_tests):
+        img = batch[i:i+1]
+        noised_image = noiser(img) if corruption == 'noise' else in_painter(img)
+        # reconstructed_image = reconstruct_image(noised_image, AE, dataloader)
+        plt.imshow(tensor_to_plt_im(torch.clip(noised_image[0], 0, 1)), cmap='gray')
+        plt.show()
+        # plt.imshow(tensor_to_plt_im(reconstructed_image.detach()[0]), cmap='gray')
+        plt.imshow(tensor_to_plt_im(AE(noised_image).detach()[0]), cmap='gray')
+        plt.show()
+
+    
 def scatter_2d_plane_form_latent_space(dataloader):
     """
     this function scatters the 2D plots of index-pairings of 384 encoded images
@@ -207,7 +245,7 @@ def scatter_2d_plane_form_latent_space(dataloader):
     AE.load_state_dict(torch.load(path))
     AE.eval()
     latent_vec_list, i = [], 0
-
+    
     # ----------- concatenate the 3 first batches -----------
     for data in dataloader:
         batch = data[0].to(device)  # Format batch
@@ -215,10 +253,10 @@ def scatter_2d_plane_form_latent_space(dataloader):
         i += 1
         if i >= 3:  # 3 first batches consist of 384 image vectors
             break
-
+    
     concat_latent_vectors = torch.cat((latent_vec_list[0], latent_vec_list[1], latent_vec_list[2]), 0)
     index_pairs = [(1, 5), (2, 7), (3, 9), (4, 11), (0, 8)]
-
+    
     # ---------------------- plot the 2D scatter if each of the index pairings above ----------------------
     for p in index_pairs:
         plt.scatter(concat_latent_vectors[:, p[0]], concat_latent_vectors[:, p[1]],
@@ -235,8 +273,9 @@ if __name__ == '__main__':
     # test_AE_novel_samples(path, 10)
     AE = AutoEncoderMNIST().to(device)
     dl = generate_mnist_data_set()
-    scatter_2d_plane_form_latent_space(dl)
+    test_AE_reconstruction(path=path, num_tests=10, dataloader=dl)
+    # scatter_2d_plane_form_latent_space(dl)
     AE.apply(weights_init)
-
+    
     # Create a batch of latent vectors to check the generator's progress
-    train(AE, dataloader=dl, modify_loss=True)
+    # train(AE, dataloader=dl, modify_loss=True, add_noise=True)
