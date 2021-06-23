@@ -7,7 +7,7 @@ import torch.optim as optim
 import torchvision.utils as vutils
 import matplotlib.pyplot as plt
 
-path = './auto_encoder_mnist with noise'
+path = './auto_encoder_mnist_loss_modified with masking'
 
 
 class AddGaussianNoise(object):
@@ -229,11 +229,11 @@ def test_AE_reconstruction(path, num_tests, dataloader, corruption='noise'):
     for i in range(num_tests):
         img = batch[i:i+1]
         noised_image = noiser(img) if corruption == 'noise' else in_painter(img)
-        # reconstructed_image = reconstruct_image(noised_image, AE, dataloader)
+        reconstructed_image = reconstruct_image(noised_image, AE, dataloader)
         plt.imshow(tensor_to_plt_im(torch.clip(noised_image[0], 0, 1)), cmap='gray')
         plt.show()
-        # plt.imshow(tensor_to_plt_im(reconstructed_image.detach()[0]), cmap='gray')
-        plt.imshow(tensor_to_plt_im(AE(noised_image).detach()[0]), cmap='gray')
+        plt.imshow(tensor_to_plt_im(reconstructed_image.detach()[0]), cmap='gray')
+        # plt.imshow(tensor_to_plt_im(AE(noised_image).detach()[0]), cmap='gray')
         plt.show()
 
     
@@ -273,9 +273,8 @@ if __name__ == '__main__':
     # test_AE_novel_samples(path, 10)
     AE = AutoEncoderMNIST().to(device)
     dl = generate_mnist_data_set()
-    test_AE_reconstruction(path=path, num_tests=10, dataloader=dl)
+    test_AE_reconstruction(path=path, num_tests=2, dataloader=dl, corruption='in-paint')
     # scatter_2d_plane_form_latent_space(dl)
     AE.apply(weights_init)
-    
     # Create a batch of latent vectors to check the generator's progress
-    # train(AE, dataloader=dl, modify_loss=True, add_noise=True)
+    # train(AE, dataloader=dl, modify_loss=True)

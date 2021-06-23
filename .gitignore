@@ -1,2 +1,6 @@
 data/
 dont use/
+auto_encoder_mnist with masking
+auto_encoder_mnist_loss_modified with noise
+auto_encoder_mnist_loss_modified with masking
+auto_encoder_mnist with noise
