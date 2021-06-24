@@ -18,10 +18,13 @@ denoising test of network (1):
 ![Optional Text](./denoised-first.jpg)
 
 denoising test of network (4):
+
 ![Optional Text](./denoised-four.jpg)
 
 in-paint mask test of network (1):
+
 ![Optional Text](./inpaint-first.jpg)
 
 in-paint mask test of network (4):
+
 ![Optional Text](./inpaint-fourth.jpg)
